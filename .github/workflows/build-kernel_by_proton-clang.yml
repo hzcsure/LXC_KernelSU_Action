@@ -1,133 +1,190 @@
-name: Build Kernel by Proton Clang
-
+name: Build kernel by proton clang for sagit MT7601U
 on:
   workflow_dispatch:
 
-env:
-  CONFIG_ENV: config.env
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build Kernel by ${{ github.actor }}
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - name: Prepare Configuration
+      run: |
+        CONFIG_ENV=$(cat config.env | grep -w "CONFIG_ENV" | head -n 1 | cut -d "=" -f 2)
+        echo "KERNEL_SOURCE=$(cat $CONFIG_ENV | grep -w "KERNEL_SOURCE" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "KERNEL_SOURCE_BRANCH=$(cat $CONFIG_ENV | grep -w "KERNEL_SOURCE_BRANCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "KERNEL_CONFIG=$(cat $CONFIG_ENV | grep -w "KERNEL_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "KERNEL_IMAGE_NAME=$(cat $CONFIG_ENV | grep -w "KERNEL_IMAGE_NAME" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ARCH=$(cat $CONFIG_ENV | grep -w "ARCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "CUSTOM_CMDS=$(cat $CONFIG_ENV | grep -w "CUSTOM_CMDS" | head -n 1 | cut -d ":" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_GCC_ARM64=$(cat $CONFIG_ENV | grep -w "ENABLE_GCC_ARM64" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_GCC_ARM32=$(cat $CONFIG_ENV | grep -w "ENABLE_GCC_ARM32" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_KERNELSU=$(cat $CONFIG_ENV | grep -w "ENABLE_KERNELSU" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "KERNELSU_TAG=$(cat $CONFIG_ENV | grep -w "KERNELSU_TAG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "DISABLE_LTO=$(cat $CONFIG_ENV | grep -w "DISABLE-LTO" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "DISABLE_CC_WERROR=$(cat $CONFIG_ENV | grep -w "DISABLE_CC_WERROR" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_CCACHE=$(cat $CONFIG_ENV | grep -w "ENABLE_CCACHE" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "NEED_DTBO=$(cat $CONFIG_ENV | grep -w "NEED_DTBO" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "BUILD_BOOT_IMG=$(cat $CONFIG_ENV | grep -w "BUILD_BOOT_IMG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "SOURCE_BOOT_IMAGE=$(cat $CONFIG_ENV | grep -w "SOURCE_BOOT_IMAGE" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_LXC=$(cat $CONFIG_ENV | grep -w "ENABLE_LXC" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ENABLE_PROTON_CLANG=$(cat $CONFIG_ENV | grep -w "ENABLE_PROTON_CLANG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "PROTON_CLANG_SOURCE=$(cat $CONFIG_ENV | grep -w "PROTON_CLANG_SOURCE" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "PROTON_CLANG_BRANCH=$(cat $CONFIG_ENV | grep -w "PROTON_CLANG_BRANCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ADD_KPROBES_CONFIG=$(cat $CONFIG_ENV | grep -w "ADD_KPROBES_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
+        echo "ADD_OVERLAYFS_CONFIG=$(cat $CONFIG_ENV | grep -w "ADD_OVERLAYFS_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
 
-      - name: Prepare Configuration
-        run: |
-          CONFIG_ENV=$(cat ${{ env.CONFIG_ENV }} | grep -w "CONFIG_ENV" | head -n 1 | cut -d "=" -f 2)
-          echo "CONFIG_ENV=${CONFIG_ENV}" >> $GITHUB_ENV
-          echo "KERNEL_SOURCE=$(cat $CONFIG_ENV | grep -w "KERNEL_SOURCE" | head -n 1 | cut -d "=" -f 2-)" >> $GITHUB_ENV
-          echo "KERNEL_SOURCE_BRANCH=$(cat $CONFIG_ENV | grep -w "KERNEL_SOURCE_BRANCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "KERNEL_CONFIG=$(cat $CONFIG_ENV | grep -w "KERNEL_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "KERNEL_IMAGE_NAME=$(cat $CONFIG_ENV | grep -w "KERNEL_IMAGE_NAME" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ARCH=$(cat $CONFIG_ENV | grep -w "ARCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "CUSTOM_CMDS=$(cat $CONFIG_ENV | grep -w "CUSTOM_CMDS" | head -n 1 | cut -d ":" -f 2)" >> $GITHUB_ENV
-          echo "EXTRA_CMDS=$(cat $CONFIG_ENV | grep -w "EXTRA_CMDS" | head -n 1 | cut -d ":" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_LXC=$(cat $CONFIG_ENV | grep -w "ENABLE_LXC" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_KERNELSU=$(cat $CONFIG_ENV | grep -w "ENABLE_KERNELSU" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ADD_KPROBES_CONFIG=$(cat $CONFIG_ENV | grep -w "ADD_KPROBES_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ADD_OVERLAYFS_CONFIG=$(cat $CONFIG_ENV | grep -w "ADD_OVERLAYFS_CONFIG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "KERNELSU_TAG=$(cat $CONFIG_ENV | grep -w "KERNELSU_TAG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_PROTON_CLANG=$(cat $CONFIG_ENV | grep -w "ENABLE_PROTON_CLANG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "PROTON_CLANG_SOURCE=$(cat $CONFIG_ENV | grep -w "PROTON_CLANG_SOURCE" | head -n 1 | cut -d "=" -f 2-)" >> $GITHUB_ENV
-          echo "PROTON_CLANG_BRANCH=$(cat $CONFIG_ENV | grep -w "PROTON_CLANG_BRANCH" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_GCC_ARM64=$(cat $CONFIG_ENV | grep -w "ENABLE_GCC_ARM64" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_GCC_ARM32=$(cat $CONFIG_ENV | grep -w "ENABLE_GCC_ARM32" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "DISABLE_LTO=$(cat $CONFIG_ENV | grep -w "DISABLE-LTO" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "DISABLE_CC_WERROR=$(cat $CONFIG_ENV | grep -w "DISABLE_CC_WERROR" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "ENABLE_CCACHE=$(cat $CONFIG_ENV | grep -w "ENABLE_CCACHE" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "NEED_DTBO=$(cat $CONFIG_ENV | grep -w "NEED_DTBO" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "BUILD_BOOT_IMG=$(cat $CONFIG_ENV | grep -w "BUILD_BOOT_IMG" | head -n 1 | cut -d "=" -f 2)" >> $GITHUB_ENV
-          echo "SOURCE_BOOT_IMAGE=$(cat $CONFIG_ENV | grep -w "SOURCE_BOOT_IMAGE" | head -n 1 | cut -d "=" -f 2-)" >> $GITHUB_ENV
+    - name: Set swap to 10G
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 10
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential bison flex libssl-dev libelf-dev ccache bc zip python3 python3-pip wget git
+    - name: Setup build kernel environment
+      run: |
+        echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%Y%m%d%H%M")" >> $GITHUB_ENV
+        echo "DEVICE=$(echo ${{ env.KERNEL_CONFIG }} | sed 's!vendor/!!;s/_defconfig//;s/_user//;s/-perf//')" >> $GITHUB_ENV
+        sudo apt-get update
+        sudo apt install -y curl python2 libelf-dev llvm lld wget vim git ccache automake flex lzop bison gperf build-essential zip zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng maven libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl libxml-simple-perl bc libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler kmod python3 python3-pip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-      - name: Download Proton Clang
-        if: env.ENABLE_PROTON_CLANG == 'true'
-        run: |
-          mkdir -p kernel_workspace
-          cd kernel_workspace
-          if [[ "${{ env.PROTON_CLANG_SOURCE }}" == *.git ]]; then
-            git clone ${{ env.PROTON_CLANG_SOURCE }} -b ${{ env.PROTON_CLANG_BRANCH }} --depth=1 clang-aosp
-          else
-            wget -q ${{ env.PROTON_CLANG_SOURCE }} -O proton-clang.tar.gz
-            tar -xzf proton-clang.tar.gz
-            mv $(tar -tzf proton-clang.tar.gz | head -1 | cut -d/ -f1) clang-aosp
-          fi
-          ls clang-aosp/bin
+    - name: Download Proton-Clang
+      if: env.ENABLE_PROTON_CLANG == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        if [[ ${{ env.PROTON_CLANG_SOURCE }} =~ git ]]; then
+            if [[ ${{ env.PROTON_CLANG_SOURCE }} == *'.tar.gz' ]]; then
+                wget -O clang.tar.gz ${{ env.PROTON_CLANG_SOURCE }}
+                mkdir clang-aosp
+                tar -C clang-aosp/ -zxvf clang.tar.gz
+            else
+                git clone ${{ env.PROTON_CLANG_SOURCE }} -b ${{ env.PROTON_CLANG_BRANCH }} clang-aosp --depth=1
+            fi
+        else
+            wget -O clang.zip ${{ env.PROTON_CLANG_SOURCE }}
+            mkdir clang-aosp
+            unzip clang.zip -d clang-aosp/
+        fi
 
-      - name: Clone Kernel Source
-        run: |
-          mkdir -p kernel_workspace
-          cd kernel_workspace
-          git clone ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} --depth=1 android-kernel
-          ls android-kernel
+    - name: Download kernel source
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
 
-      - name: Prepare sagit config for MT7601U
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          # Enable MT7601U and dependencies
-          echo "CONFIG_WL_MEDIATEK=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "CONFIG_MAC80211=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "CONFIG_MT7601U=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "CONFIG_CRYPTO_CCM=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          # USB OTG support for USB WiFi adapter
-          echo "CONFIG_USB_OTG=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "CONFIG_USB_OTG_FSM=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "CONFIG_USB_CONFIGFS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          # Fix clang VDSO assembler error: disable 32-bit VDSO
-          sed -i 's/CONFIG_COMPAT_VDSO=y/# CONFIG_COMPAT_VDSO is not set/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-          echo "=== Config check ==="
-          grep -E "CONFIG_WL_MEDIATEK|CONFIG_MAC80211|CONFIG_MT7601U|CONFIG_CRYPTO_CCM|CONFIG_COMPAT_VDSO|CONFIG_USB_OTG" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+    - name: Setup Configuration for Kernel (MT7601U + VDSO fix)
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        # === MT7601U WiFi driver ===
+        echo "CONFIG_WL_MEDIATEK=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_MAC80211=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_MT7601U=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_CRYPTO_CCM=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        # === USB OTG support ===
+        echo "CONFIG_USB_OTG=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_USB_OTG_FSM=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_USB_CONFIGFS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        # === Fix clang VDSO error: /usr/bin/as unrecognized option -EL ===
+        sed -i 's/CONFIG_COMPAT_VDSO=y/# CONFIG_COMPAT_VDSO is not set/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        # === Disable stack protector (clang compat) ===
+        sed -i "s/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        # === Disable LTO ===
+        if [ "${{ env.DISABLE_LTO }}" = "true" ]; then
+            sed -i 's/CONFIG_LTO=y/CONFIG_LTO=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            sed -i 's/CONFIG_LTO_CLANG=y/CONFIG_LTO_CLANG=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            sed -i 's/CONFIG_THINLTO=y/CONFIG_THINLTO=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            echo "CONFIG_LTO_NONE=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
+        if [ "${{ env.DISABLE_CC_WERROR }}" = "true" ]; then
+            echo "CONFIG_CC_WERROR=n" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
+        echo "=== Verify config ==="
+        grep -E "WL_MEDIATEK|MAC80211|MT7601U|CRYPTO_CCM|COMPAT_VDSO|USB_OTG|STACKPROTECTOR" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
 
-      - name: Build kernel
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
-          export KBUILD_BUILD_HOST=Github-Action
-          export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-          make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip ${{ env.KERNEL_CONFIG }}
-          if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
-            make -j$(nproc --all) CC="ccache clang" O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
-          else
-            make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
-          fi
+    - name: Build kernel
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
+        export KBUILD_BUILD_HOST=Github-Action
+        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+        # Step 1: Generate .config from defconfig
+        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip ${{ env.KERNEL_CONFIG }}
+        # Step 2: Build
+        if [ "${{ env.ENABLE_CCACHE }}" = "true" ]; then
+             make -j$(nproc --all) CC="ccache clang" O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
+        else
+             make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
+        fi
 
-      - name: Install modules
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          make O=out ARCH=${{ env.ARCH }} INSTALL_MOD_PATH=modules modules_install
-          find modules -name "*.ko" -type f
+    - name: Check kernel output files
+      run: |
+       cd $GITHUB_WORKSPACE/kernel_workspace
+       if [ -f android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }} ]; then
+           echo "CHECK_FILE_IS_OK=true" >> $GITHUB_ENV
+           echo "Kernel image OK: ${{ env.KERNEL_IMAGE_NAME }}"
+       else
+           echo "ERROR: Kernel output not found!"
+           exit 1
+       fi
 
-      - name: Download MT7601U firmware
-        run: |
-          wget -O mt7601u.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin
-          ls -lh mt7601u.bin
+    - name: Install kernel modules
+      if: env.CHECK_FILE_IS_OK == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        make O=out ARCH=${{ env.ARCH }} INSTALL_MOD_PATH=modules modules_install
+        echo "=== Installed modules ==="
+        find modules -name "*.ko" -type f
 
-      - name: Upload kernel image
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.KERNEL_IMAGE_NAME }}-sagit
-          path: kernel_workspace/android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }}
+    - name: Download MT7601U firmware
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        wget -O mt7601u.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin
+        ls -lh mt7601u.bin
 
-      - name: Upload kernel modules
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-modules-sagit
-          path: |
-            kernel_workspace/android-kernel/modules/lib/modules/*/
-            !kernel_workspace/android-kernel/modules/lib/modules/*/build
-            !kernel_workspace/android-kernel/modules/lib/modules/*/source
+    - name: Make Anykernel3
+      if: env.CHECK_FILE_IS_OK == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com/osm0sis/AnyKernel3
+        sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
+        sed -i 's!block=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!block=auto;!g' AnyKernel3/anykernel.sh
+        sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' AnyKernel3/anykernel.sh
+        cp android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }} AnyKernel3/
+        # Also copy modules into AnyKernel3 for auto-load
+        mkdir -p AnyKernel3/modules
+        find android-kernel/modules -name "*.ko" -exec cp {} AnyKernel3/modules/ \;
+        rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
-      - name: Upload MT7601U firmware
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mt7601u-firmware
-          path: mt7601u.bin
+    - name: Upload kernel image
+      if: env.CHECK_FILE_IS_OK == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.KERNEL_IMAGE_NAME }}-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        path: kernel_workspace/android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }}
+
+    - name: Upload AnyKernel3
+      if: env.CHECK_FILE_IS_OK == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AnyKernel3-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        path: kernel_workspace/AnyKernel3/*
+
+    - name: Upload kernel modules
+      if: env.CHECK_FILE_IS_OK == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-modules-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        path: |
+          kernel_workspace/android-kernel/modules/lib/modules/*/
+          !kernel_workspace/android-kernel/modules/lib/modules/*/build
+          !kernel_workspace/android-kernel/modules/lib/modules/*/source
+
+    - name: Upload MT7601U firmware
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mt7601u-firmware
+        path: kernel_workspace/mt7601u.bin

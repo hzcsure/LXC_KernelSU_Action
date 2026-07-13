@@ -246,7 +246,7 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         make O=out ARCH=${{ env.ARCH }} INSTALL_MOD_PATH=modules modules_install
         echo "=== Installed modules ==="
-        find modules -name "*.ko" -type f
+        find out/modules -name "*.ko" -type f
 
     - name: Download MT7601U firmware
       run: |
@@ -265,7 +265,7 @@ jobs:
         cp android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }} AnyKernel3/
         # Also copy modules into AnyKernel3 for auto-load
         mkdir -p AnyKernel3/modules
-        find android-kernel/modules -name "*.ko" -exec cp {} AnyKernel3/modules/ \;
+        find android-kernel/out/modules -name "*.ko" -exec cp {} AnyKernel3/modules/ \;
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
     - name: Upload kernel image
@@ -288,9 +288,9 @@ jobs:
       with:
         name: kernel-modules-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
         path: |
-          kernel_workspace/android-kernel/modules/lib/modules/*/
-          !kernel_workspace/android-kernel/modules/lib/modules/*/build
-          !kernel_workspace/android-kernel/modules/lib/modules/*/source
+          kernel_workspace/android-kernel/out/modules/lib/modules/*/
+          !kernel_workspace/android-kernel/out/modules/lib/modules/*/build
+          !kernel_workspace/android-kernel/out/modules/lib/modules/*/source
 
     - name: Upload MT7601U firmware
       if: success()

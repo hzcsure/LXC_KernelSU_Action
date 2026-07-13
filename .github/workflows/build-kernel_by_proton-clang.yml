@@ -131,6 +131,8 @@ jobs:
         if [ "${{ env.DISABLE_CC_WERROR }}" = "true" ]; then
             echo "CONFIG_CC_WERROR=n" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
         fi
+        # === Fix mac80211 IEEE80211_BAND_60GHZ (not in 4.4 kernel enum) ===
+        sed -i '1i#define IEEE80211_BAND_60GHZ 2' net/mac80211/tx.c
         echo "=== Verify config ==="
         grep -E "WL_MEDIATEK|MAC80211|MT7601U|CRYPTO_CCM|COMPAT_VDSO|USB_OTG|STACKPROTECTOR" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
 
@@ -161,18 +163,60 @@ jobs:
           echo "  BUILD FAILED (exit code: $BUILD_RC)"
           echo "============================================="
           echo ""
-          echo "=== Last 80 lines of build log ==="
-          tail -80 out/build.log
+          echo "=== Last 100 lines of build log ==="
+          tail -100 out/build.log
           echo ""
-          echo "=== Error/warning lines (last 60) ==="
-          grep -iE '(error:|fatal error|make\[.*\]: \*\*\*|undefined reference)' out/build.log | tail -60
+          echo "=== Error/warning lines (last 80) ==="
+          grep -iE '(error:|fatal error|make\[.*\]: \*\*\*|undefined reference)' out/build.log | tail -80
           echo ""
-          echo "=== Checking for common issues ==="
-          echo "Total error lines: $(grep -c 'error:' out/build.log 2>/dev/null || echo 0)"
-          echo "Total warning lines: $(grep -c 'warning:' out/build.log 2>/dev/null || echo 0)"
+          echo "=== Error stats ==="
+          TOTAL_ERR=$(grep -c 'error:' out/build.log 2>/dev/null || echo 0)
+          TOTAL_WARN=$(grep -c 'warning:' out/build.log 2>/dev/null || echo 0)
+          echo "Total error lines: $TOTAL_ERR"
+          echo "Total warning lines: $TOTAL_WARN"
+          # --- Write Github Actions Annotations (visible on summary page) ---
+          echo "=== Annotating errors ==="
+          grep -n 'error:' out/build.log | tail -30 | while IFS=: read -r lineno msg; do
+            # Extract file path if present (format: path/to/file.c:NN:NN: error: ...)
+            srcfile=$(echo "$msg" | sed -n 's/^\([^ :]\+\):\([0-9]\+\):\([0-9]\+\):.*/\1/p')
+            srcline=$(echo "$msg" | sed -n 's/^\([^ :]\+\):\([0-9]\+\):\([0-9]\+\):.*/\2/p')
+            cleanmsg=$(echo "$msg" | cut -c1-200)
+            if [ -n "$srcfile" ]; then
+              echo "::error file=${srcfile},line=${srcline},title=Build Error::${cleanmsg}"
+            else
+              echo "::error title=Build Error::${cleanmsg}"
+            fi
+          done
+          # --- Write Step Summary (visible on run summary page) ---
+          {
+            echo "## Build Failure Report"
+            echo ""
+            echo "| Metric | Count |"
+            echo "|--------|-------|"
+            echo "| Error lines | $TOTAL_ERR |"
+            echo "| Warning lines | $TOTAL_WARN |"
+            echo ""
+            echo "### Last errors in build log"
+            echo '```'
+            grep -iE '(error:|fatal error)' out/build.log | tail -15
+            echo '```'
+            echo ""
+            echo "### First make failure"
+            echo '```'
+            grep 'make\[.*\]: \*\*\*' out/build.log | head -5
+            echo '```'
+            echo ""
+            echo "> Full log available as artifact: \`build-log-sagit-*.zip\`"
+          } >> $GITHUB_STEP_SUMMARY
           exit $BUILD_RC
         fi
         echo "=== Build successful ==="
+        # --- Write success summary ---
+        {
+          echo "## Build Succeeded"
+          echo "Kernel image: \`${{ env.KERNEL_IMAGE_NAME }}\`"
+          echo "Device: \`${{ env.DEVICE }}\`"
+        } >> $GITHUB_STEP_SUMMARY
 
     - name: Upload build log (always)
       if: always()

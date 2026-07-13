@@ -157,7 +157,7 @@ jobs:
         make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_CONFIG }}
         # Step 2: Build (capture full log for error diagnosis)
         set +e
-        make -j$(nproc --all) ${MAKE_ARGS} 2>&1 | tee out/build.log
+        make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_IMAGE_NAME }} modules 2>&1 | tee out/build.log
         BUILD_RC=${PIPESTATUS[0]}
         set -e
         if [ $BUILD_RC -ne 0 ]; then

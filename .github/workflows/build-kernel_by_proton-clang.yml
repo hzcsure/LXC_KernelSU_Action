@@ -132,7 +132,10 @@ jobs:
             echo "CONFIG_CC_WERROR=n" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
         fi
         # === Fix mac80211 IEEE80211_BAND_60GHZ (not in 4.4 kernel enum) ===
-        sed -i '1i#define IEEE80211_BAND_60GHZ 2' net/mac80211/tx.c
+        # Apply define to ALL mac80211 source files that reference it
+        for f in $(grep -rl 'IEEE80211_BAND_60GHZ' net/mac80211/); do
+            sed -i '1i#define IEEE80211_BAND_60GHZ 2' "$f"
+        done
         echo "=== Verify config ==="
         grep -E "WL_MEDIATEK|MAC80211|MT7601U|CRYPTO_CCM|COMPAT_VDSO|USB_OTG|STACKPROTECTOR" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
 

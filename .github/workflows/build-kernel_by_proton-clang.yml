@@ -146,10 +146,41 @@ jobs:
         export HOSTCFLAGS="-Wno-error -Wno-error=format-security"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+        # === Common make args ===
+        MAKE_ARGS="CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
         # Step 1: Generate .config
-        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- ${{ env.KERNEL_CONFIG }}
-        # Step 2: Build
-        make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_CONFIG }}
+        # Step 2: Build (capture full log for error diagnosis)
+        set +e
+        make -j$(nproc --all) ${MAKE_ARGS} 2>&1 | tee out/build.log
+        BUILD_RC=${PIPESTATUS[0]}
+        set -e
+        if [ $BUILD_RC -ne 0 ]; then
+          echo ""
+          echo "============================================="
+          echo "  BUILD FAILED (exit code: $BUILD_RC)"
+          echo "============================================="
+          echo ""
+          echo "=== Last 80 lines of build log ==="
+          tail -80 out/build.log
+          echo ""
+          echo "=== Error/warning lines (last 60) ==="
+          grep -iE '(error:|fatal error|make\[.*\]: \*\*\*|undefined reference)' out/build.log | tail -60
+          echo ""
+          echo "=== Checking for common issues ==="
+          echo "Total error lines: $(grep -c 'error:' out/build.log 2>/dev/null || echo 0)"
+          echo "Total warning lines: $(grep -c 'warning:' out/build.log 2>/dev/null || echo 0)"
+          exit $BUILD_RC
+        fi
+        echo "=== Build successful ==="
+
+    - name: Upload build log (always)
+      if: always()
+      uses: actions/upload-artifact@v4
+      continue-on-error: true
+      with:
+        name: build-log-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
+        path: kernel_workspace/android-kernel/out/build.log
 
     - name: Check kernel output files
       run: |

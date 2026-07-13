@@ -138,13 +138,17 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
+        # Unset config.env feature flags -- they pollute kernel Makefile $(VAR) expansion
+        unset DISABLE_LTO DISABLE_CC_WERROR ADD_KPROBES_CONFIG ADD_OVERLAYFS_CONFIG
+        unset ENABLE_LXC ENABLE_KERNELSU ENABLE_PROTON_CLANG ENABLE_GCC_ARM64 ENABLE_GCC_ARM32
+        unset ENABLE_CCACHE NEED_DTBO BUILD_BOOT_IMG PROTON_CLANG_SOURCE PROTON_CLANG_BRANCH
         export PYTHON=python2
         export HOSTCFLAGS="-Wno-error -Wno-error=format-security"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        # Step 1: Generate .config from defconfig
+        # Step 1: Generate .config
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- ${{ env.KERNEL_CONFIG }}
-        # Step 2: Build (4.4 kernel needs bare CC=clang, no LLVM=1)
+        # Step 2: Build
         make -j$(nproc --all) CC=clang O=out ARCH=${{ env.ARCH }} ${{ env.CUSTOM_CMDS }} CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
     - name: Check kernel output files

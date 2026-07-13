@@ -78,6 +78,7 @@ jobs:
     - name: Pre-flight sanity check
       run: |
         set -e
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         echo "=== 1. Proton Clang ==="
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
         which clang && clang --version | head -1

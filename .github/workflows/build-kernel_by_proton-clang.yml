@@ -75,6 +75,35 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone ${{ env.KERNEL_SOURCE }} -b ${{ env.KERNEL_SOURCE_BRANCH }} android-kernel --depth=1
 
+    - name: Pre-flight sanity check
+      run: |
+        set -e
+        echo "=== 1. Proton Clang ==="
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
+        which clang && clang --version | head -1
+
+        echo "=== 2. Cross compilers ==="
+        aarch64-linux-gnu-gcc --version | head -1
+        arm-linux-gnueabi-gcc --version | head -1
+
+        echo "=== 3. python2 ==="
+        python2 --version
+
+        echo "=== 4. Defconfig exists ==="
+        ls -l arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+
+        echo "=== 5. Quick defconfig dry-run ==="
+        make -s CC=clang O=out ARCH=${{ env.ARCH }} CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- ${{ env.KERNEL_CONFIG }} 2>&1 | tail -3
+        test -f out/.config && echo "OK: .config generated" || { echo "FAIL: no .config"; exit 1; }
+
+        echo "=== 6. Check VDSO disabled ==="
+        grep COMPAT_VDSO out/.config
+
+        echo "=== 7. Check MT7601U enabled ==="
+        grep -E "CONFIG_MT7601U|CONFIG_MAC80211" out/.config || echo "WARNING: not found (will be injected in next step)"
+
+        echo "=== ALL CHECKS PASSED ==="
+
     - name: Setup Configuration for Kernel (MT7601U + VDSO fix)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
@@ -108,6 +137,10 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
+        # 4.4 kernel scripts need python2
+        export PYTHON=python2
+        # Suppress host tool warnings-as-errors (Ubuntu 22.04 GCC is strict)
+        export HOSTCFLAGS="-Wno-error -Wno-error=format-security"
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
         # Step 1: Generate .config from defconfig

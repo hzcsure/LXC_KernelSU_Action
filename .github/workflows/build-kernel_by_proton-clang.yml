@@ -249,10 +249,11 @@ jobs:
         find out/modules -name "*.ko" -type f
 
     - name: Download MT7601U firmware
+      continue-on-error: true
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        wget -O mt7601u.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mt7601u.bin
-        ls -lh mt7601u.bin
+        wget -O mt7601u.bin https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mediatek/mt7601u.bin || echo "FW download failed, use local copy"
+        ls -lh mt7601u.bin 2>/dev/null || echo "mt7601u.bin not downloaded"
 
     - name: Make Anykernel3
       if: env.CHECK_FILE_IS_OK == 'true'

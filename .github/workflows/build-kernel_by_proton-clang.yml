@@ -108,11 +108,11 @@ jobs:
     - name: Setup Configuration for Kernel (MT7601U + VDSO fix)
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # === MT7601U WiFi driver ===
+        # === MT7601U WiFi driver (built-in = y, no insmod needed) ===
         echo "CONFIG_WL_MEDIATEK=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        echo "CONFIG_MAC80211=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        echo "CONFIG_MT7601U=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        echo "CONFIG_CRYPTO_CCM=m" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_MAC80211=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_MT7601U=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        echo "CONFIG_CRYPTO_CCM=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
         # === USB OTG support ===
         echo "CONFIG_USB_OTG=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
         echo "CONFIG_USB_OTG_FSM=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
@@ -157,7 +157,7 @@ jobs:
         make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_CONFIG }}
         # Step 2: Build (capture full log for error diagnosis)
         set +e
-        make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_IMAGE_NAME }} modules 2>&1 | tee out/build.log
+        make -j$(nproc --all) ${MAKE_ARGS} ${{ env.KERNEL_IMAGE_NAME }} 2>&1 | tee out/build.log
         BUILD_RC=${PIPESTATUS[0]}
         set -e
         if [ $BUILD_RC -ne 0 ]; then
@@ -240,14 +240,6 @@ jobs:
            exit 1
        fi
 
-    - name: Install kernel modules
-      if: env.CHECK_FILE_IS_OK == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        make O=out ARCH=${{ env.ARCH }} INSTALL_MOD_PATH=modules modules_install
-        echo "=== Installed modules ==="
-        find out/modules -name "*.ko" -type f
-
     - name: Download MT7601U firmware
       continue-on-error: true
       run: |
@@ -261,12 +253,11 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3
         sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
-        sed -i 's!block=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!block=auto;!g' AnyKernel3/anykernel.sh
+        sed -i 's/do.modules=0/do.modules=1/g' AnyKernel3/anykernel.sh
+        sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=/dev/block/bootdevice/by-name/boot;!g' AnyKernel3/anykernel.sh
         sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' AnyKernel3/anykernel.sh
         cp android-kernel/out/arch/${{ env.ARCH }}/boot/${{ env.KERNEL_IMAGE_NAME }} AnyKernel3/
-        # Also copy modules into AnyKernel3 for auto-load
-        mkdir -p AnyKernel3/modules
-        find android-kernel/out/modules -name "*.ko" -exec cp {} AnyKernel3/modules/ \;
+        # MT7601U built-in = y, no modules to copy
         rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
     - name: Upload kernel image
@@ -282,16 +273,6 @@ jobs:
       with:
         name: AnyKernel3-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
         path: kernel_workspace/AnyKernel3/*
-
-    - name: Upload kernel modules
-      if: env.CHECK_FILE_IS_OK == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-modules-${{ env.DEVICE }}-${{ env.BUILD_TIME }}
-        path: |
-          kernel_workspace/android-kernel/out/modules/lib/modules/*/
-          !kernel_workspace/android-kernel/out/modules/lib/modules/*/build
-          !kernel_workspace/android-kernel/out/modules/lib/modules/*/source
 
     - name: Upload MT7601U firmware
       if: success()
